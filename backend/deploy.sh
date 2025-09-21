@@ -20,12 +20,26 @@ log_warn() {
 
 # 環境設定
 ENVIRONMENT=${1:-dev}
-PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
 
+# 共通設定ファイルから環境変数を読み込み
+if [ -f "../.env" ]; then
+    export $(cat ../.env | grep -v '^#' | grep -v '^$' | xargs)
+    log_info "共通設定ファイルから環境変数を読み込みました"
+elif [ -f ".env" ]; then
+    export $(cat .env | grep -v '^#' | grep -v '^$' | xargs)
+    log_info "ローカル設定ファイルから環境変数を読み込みました"
+fi
+
+# PROJECT_IDの確認
 if [ -z "$PROJECT_ID" ]; then
-    log_error "Google Cloud プロジェクトが設定されていません"
-    echo "gcloud config set project YOUR_PROJECT_ID を実行してください"
-    exit 1
+    PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
+    if [ -z "$PROJECT_ID" ]; then
+        log_error "Google Cloud プロジェクトが設定されていません"
+        echo "以下のいずれかを実行してください:"
+        echo "1. ../.env ファイルに PROJECT_ID を設定"
+        echo "2. gcloud config set project YOUR_PROJECT_ID"
+        exit 1
+    fi
 fi
 
 log_info "FastAPI Backend デプロイ開始: 環境=$ENVIRONMENT, プロジェクト=$PROJECT_ID"

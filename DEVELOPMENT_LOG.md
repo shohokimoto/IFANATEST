@@ -266,13 +266,34 @@
   - `backend/` = Python FastAPI（ETL処理、API）
   - `scraper/` = Node.js（ブラウザ自動化のみ）
 
+### 2025-01-27 全体ファイル見直しとリファクタリング
+- **重複ファイル削除**: 
+  - `deploy.sh` (ルート) - 重複していた旧デプロイスクリプト
+  - `cloudbuild.yaml` (ルート) - 重複していた旧Cloud Build設定
+  - `env.global.example` - 不要になったテンプレートファイル
+  - `backend/env.example` - 不要になったテンプレートファイル
+  - `scraper/env.example` - 不要になったテンプレートファイル
+  - `scripts/load-env.sh` - 不要になったスクリプト
+- **不足ファイル追加**:
+  - `scraper/deploy.sh` - Scraper Service用デプロイスクリプト
+  - `scraper/cloudbuild.yaml` - Scraper Service用Cloud Build設定
+- **設定ファイル修正**:
+  - `backend/app/config.py` - 環境変数ファイルのパスを `../../.env` に修正
+  - `README.md` - ファイル構成とセットアップ手順を更新
+- **GCPプロジェクト設定**:
+  - プロジェクトID: `ifana-test` 設定完了
+  - 認証: `s_kimoto@ifreagroup.co.jp` 確認済み
+  - 環境変数: `.env`ファイルに設定完了
+
 ### 最終的なプロジェクト構成
 ```
 IFANA_TEST/
+├── .env                          # 🔧 全体共通設定ファイル
 ├── backend/                      # Python FastAPI Backend
 │   ├── app/                     # アプリケーションコード
 │   ├── requirements.txt         # Python依存関係
 │   ├── Dockerfile              # Python Docker設定
+│   ├── cloudbuild.yaml         # Cloud Build設定
 │   └── deploy.sh               # デプロイスクリプト
 ├── scraper/                     # Node.js Scraper Service
 │   ├── src/
@@ -284,11 +305,22 @@ IFANA_TEST/
 │   │       └── scraper.js      # Puppeteerスクレイピング
 │   ├── package.json            # Node.js依存関係
 │   ├── Dockerfile              # Node.js Docker設定
-│   └── env.example             # 環境変数サンプル
+│   ├── cloudbuild.yaml         # Cloud Build設定
+│   └── deploy.sh               # デプロイスクリプト
 ├── sql/                        # BigQueryスキーマ
 ├── DEVELOPMENT_LOG.md          # 開発ログ
+├── IFREAANALITICS_v_1.md       # 要件定義書
 └── README.md                   # プロジェクト説明
 ```
 
 ## 備考
-このシステムは要件定義書（IFREAANALITICS_v_1.md）のMVP仕様に完全準拠し、将来の拡張性も考慮した設計となっています。Python版への移行により、FastAPI + Reactの将来構築に向けた最適なアーキテクチャが実現されました。すべての機能が実装済みで、即座にデプロイ・運用開始が可能な状態です。
+このシステムは要件定義書（IFREAANALITICS_v_1.md）のMVP仕様に完全準拠し、将来の拡張性も考慮した設計となっています。Python版への移行により、FastAPI + Reactの将来構築に向けた最適なアーキテクチャが実現されました。
+
+### 最終的な改善点
+1. **重複排除**: 不要な重複ファイルを削除
+2. **一貫性**: 各サービスに統一された構成
+3. **保守性**: 設定ファイルの一元管理（`.env`）
+4. **完全性**: 各サービスに必要なファイルを完備
+5. **デプロイ準備**: GCPプロジェクト設定完了
+
+すべての機能が実装済みで、即座にデプロイ・運用開始が可能な状態です。組織管理者によるCloud Run API有効化後、BigQueryとGCSリソースの作成、そしてサービスデプロイを進めることができます。

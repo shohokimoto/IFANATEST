@@ -40,6 +40,7 @@
 │   │   └── api/routes.py        # APIルート
 │   ├── requirements.txt         # Python依存関係
 │   ├── Dockerfile              # Python Docker設定
+│   ├── cloudbuild.yaml         # Cloud Build設定
 │   └── deploy.sh               # デプロイスクリプト
 ├── scraper/                     # Node.js Scraper Service
 │   ├── src/
@@ -51,7 +52,8 @@
 │   │       └── scraper.js      # Puppeteerスクレイピング
 │   ├── package.json            # Node.js依存関係
 │   ├── Dockerfile              # Node.js Docker設定
-│   └── env.example             # 環境変数サンプル
+│   ├── cloudbuild.yaml         # Cloud Build設定
+│   └── deploy.sh               # デプロイスクリプト
 ├── sql/                        # BigQueryスキーマ
 │   ├── setup_bigquery.sql      # 初期セットアップ
 │   ├── create_dataset.sql      # データセット作成
@@ -66,6 +68,22 @@
 ## セットアップ手順
 
 ### 1. 前提条件
+
+### 2. 環境設定
+```bash
+# 環境変数ファイルを作成
+touch .env
+
+# 設定ファイルを編集（実際の値を設定）
+nano .env
+```
+
+**設定が必要な項目:**
+- `PROJECT_ID`: GCPプロジェクトID
+- `GCS_BUCKET`: Google Cloud Storageバケット名
+- `STORES_SHEET_ID`: 店舗マスタ用Google Sheets ID
+
+### 3. 前提条件
 
 - Google Cloud Project
 - 必要なAPIの有効化:

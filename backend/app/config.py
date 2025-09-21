@@ -10,6 +10,11 @@ from pydantic_settings import BaseSettings as PydanticBaseSettings
 class Settings(PydanticBaseSettings):
     """アプリケーション設定"""
     
+    # 環境変数ファイルの場所を指定（ルートディレクトリの.env）
+    class Config:
+        env_file = "../../.env"
+        env_file_encoding = "utf-8"
+    
     # アプリケーション設定
     app_name: str = "Restaurant Board ETL API"
     app_version: str = "1.0.0"
