@@ -1,4 +1,4 @@
-# Node.js 20 with Puppeteer for restaurant board scraping
+# Node.js Scraper Service Dockerfile
 FROM node:20-slim
 
 # Install system dependencies for Puppeteer
@@ -43,8 +43,12 @@ RUN groupadd -r appuser && useradd -r -g appuser -G audio,video appuser \
     && chown -R appuser:appuser /app
 USER appuser
 
-# Expose port (if needed for health checks)
-EXPOSE 8080
+# Expose port
+EXPOSE 3001
 
-# Default command
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:3001/health || exit 1
+
+# Start the application
 CMD ["node", "src/index.js"]

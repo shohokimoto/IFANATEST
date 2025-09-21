@@ -248,10 +248,47 @@
 - パフォーマンステスト
 
 ## 完了日時
-- **開発完了**: 2025年1月27日
-- **総開発時間**: 約2時間
-- **生成ファイル数**: 20ファイル
-- **総行数**: 約2,000行
+- **初期開発完了**: 2025年1月27日
+- **Python版移行完了**: 2025年1月27日
+- **ファイル整理完了**: 2025年1月27日
+- **総開発時間**: 約3時間
+- **生成ファイル数**: 25ファイル
+- **総行数**: 約3,000行
+
+## 最新の更新履歴
+
+### 2025-01-27 ファイル整理とアーキテクチャ最適化
+- **scraper.jsの移動**: `src/services/scraper.js` → `scraper/src/services/scraper.js`
+- **不要ディレクトリ削除**: `src/` ディレクトリ全体を削除
+- **MIGRATION_GUIDE.md削除**: 移行完了により不要ファイルを削除
+- **要件定義書更新**: Python版アーキテクチャに合わせて更新
+- **マイクロサービス構成の明確化**: 
+  - `backend/` = Python FastAPI（ETL処理、API）
+  - `scraper/` = Node.js（ブラウザ自動化のみ）
+
+### 最終的なプロジェクト構成
+```
+IFANA_TEST/
+├── backend/                      # Python FastAPI Backend
+│   ├── app/                     # アプリケーションコード
+│   ├── requirements.txt         # Python依存関係
+│   ├── Dockerfile              # Python Docker設定
+│   └── deploy.sh               # デプロイスクリプト
+├── scraper/                     # Node.js Scraper Service
+│   ├── src/
+│   │   ├── index.js            # Express API
+│   │   ├── config/index.js     # 設定管理
+│   │   ├── utils/logger.js     # ログ管理
+│   │   └── services/
+│   │       ├── index.js        # サービスインデックス
+│   │       └── scraper.js      # Puppeteerスクレイピング
+│   ├── package.json            # Node.js依存関係
+│   ├── Dockerfile              # Node.js Docker設定
+│   └── env.example             # 環境変数サンプル
+├── sql/                        # BigQueryスキーマ
+├── DEVELOPMENT_LOG.md          # 開発ログ
+└── README.md                   # プロジェクト説明
+```
 
 ## 備考
-このシステムは要件定義書（IFREAANALITICS_v_1.md）のMVP仕様に完全準拠し、将来の拡張性も考慮した設計となっています。すべての機能が実装済みで、即座にデプロイ・運用開始が可能な状態です。
+このシステムは要件定義書（IFREAANALITICS_v_1.md）のMVP仕様に完全準拠し、将来の拡張性も考慮した設計となっています。Python版への移行により、FastAPI + Reactの将来構築に向けた最適なアーキテクチャが実現されました。すべての機能が実装済みで、即座にデプロイ・運用開始が可能な状態です。

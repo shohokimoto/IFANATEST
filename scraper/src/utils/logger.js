@@ -1,5 +1,5 @@
 /**
- * ログ管理ユーティリティ
+ * スクレイピングサービス用ログ管理
  */
 const winston = require('winston');
 const config = require('../config');
@@ -11,7 +11,7 @@ const logger = winston.createLogger({
     winston.format.errors({ stack: true }),
     winston.format.json()
   ),
-  defaultMeta: { service: 'restaurant-board-etl' },
+  defaultMeta: { service: 'restaurant-board-scraper' },
   transports: [
     new winston.transports.Console({
       format: winston.format.combine(

@@ -49,13 +49,13 @@
 
 ## 4. 全体アーキテクチャ（MVP）
 ```
-[Google Sheets: Stores]  →  [Cloud Run: Docker/Node20 + Puppeteer]
+[Google Sheets: Stores]  →  [Scraper Service: Node.js + Puppeteer]
        │ 読取API                          │ CSV(共通カラム)
        └───────┬──────────────────────┘
                ▼
-         [GCS: landing/tmp]  →  [BigQuery: stage_reservations_rb]  →  MERGE  →  [reservations_rb]
-                                                                                │
-                                                                                └→ [Connected Sheets]
+    [Backend Service: Python FastAPI]  →  [GCS: landing/tmp]  →  [BigQuery: stage_reservations_rb]  →  MERGE  →  [reservations_rb]
+                                                                                                                      │
+                                                                                                                      └→ [Connected Sheets]
 ```
 - リージョンは原則 **asia-northeast1** で統一。タイムゾーンは **JST**。
 
@@ -70,30 +70,35 @@
 - `from_date/to_date`: 指定があれば期間優先でバックフィル。
 - 共有は最小限。監査ログ配慮。MVPは平置きを許容。
 
-### FR-2. スクレイピング（Puppeteer）
+### FR-2. スクレイピング（Scraper Service: Node.js + Puppeteer）
 - RB ログイン → 期間設定 → CSVダウンロード。
 - ダウンロード先は `/tmp`。Shift_JIS→UTF-8へ変換。
 - 失敗時は最大3回リトライ（指数バックオフ）。
 - 2FA/画像認証がある店舗は `active=false` で除外（MVP）。
+- Express APIでHTTPエンドポイントを提供し、Backend Serviceから呼び出し。
 
-### FR-3. 整形（Transform）
+### FR-3. 整形（Backend Service: Python FastAPI）
 - 共通カラムへ正規化（#7 参照）。
 - 欠損/異常値はスキップまたはNULL化。日付/時間は正規フォーマットへ。
 - 1店舗ごとCSV生成、さらに全店舗分を1ファイルに集約可能。
+- Pandasを使用したデータ変換処理。
 
-### FR-4. GCS への配置
+### FR-4. GCS への配置（Backend Service）
 - オブジェクト命名規則（例）:
   - `landing/restaurant_board/YYYY/MM/DD/run_<run_id>/rb_<store_id>_<YYYYMMDD>.csv`
   - 手動アップロード用: `manual/restaurant_board/YYYY/MM/...`
+- Google Cloud Storage Python Client Libraryを使用。
 
-### FR-5. BigQuery への取り込み（Load Job）
+### FR-5. BigQuery への取り込み（Backend Service）
 - 取り込み先は **ステージ表** `stage_reservations_rb`（日付は `ingestion_ts` パーティション）。
 - スキーマは共通カラム + メタ（#7）。
+- Google Cloud BigQuery Python Client Libraryを使用。
 
-### FR-6. ステージ→MERGE（差分反映）
+### FR-6. ステージ→MERGE（差分反映）（Backend Service）
 - 一意キー `record_key` と内容ハッシュ `record_hash` を用いて、本番 `reservations_rb` に**UPSERT**。
 - ステージ内重複は `ROW_NUMBER()` で排除（最新 `ingestion_ts` を優先）。
 - 再取得窓は **前日 + 過去7日** を推奨。
+- BigQuery MERGE文をPythonから実行。
 
 ### FR-7. 表示（Connected Sheets）
 - `reservations_rb` を**期間指定**で参照（必要列に限定するカスタムSQL）。

@@ -12,40 +12,55 @@
 ## アーキテクチャ
 
 ```
-[Google Sheets: Stores] → [Cloud Run: Docker/Node20 + Puppeteer]
-       │ 読取API                          │ CSV(共通カラム)
-       └───────┬──────────────────────┘
-               ▼
-[GCS: landing/tmp] → [BigQuery: stage_reservations_rb] → MERGE → [reservations_rb]
-                                                                        │
-                                                                        └→ [Connected Sheets]
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   FastAPI       │    │   Node.js       │    │   React         │
+│   (Python)      │◄──►│   Scraper       │    │   (Frontend)    │
+│   - ETL Core    │    │   - Puppeteer   │    │   - Dashboard   │
+│   - BigQuery    │    │   - Browser     │    │   - Analytics   │
+│   - GCS         │    │   - Login       │    │                 │
+│   - Store Master│    │                 │    │                 │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
 ## ファイル構成
 
 ```
-├── src/
-│   ├── config/index.js           # 設定管理
-│   ├── utils/logger.js           # ログ管理
-│   ├── services/
-│   │   ├── storeMaster.js        # 店舗マスタ読み取り
-│   │   ├── scraper.js            # レストランボードスクレイピング
-│   │   ├── transformer.js        # データ変換・正規化
-│   │   ├── gcsService.js         # GCS操作
-│   │   └── bigqueryService.js    # BigQuery操作
-│   └── index.js                  # メインエントリーポイント
-├── sql/
-│   ├── setup_bigquery.sql        # BigQuery初期セットアップ
-│   ├── create_dataset.sql        # データセット作成
-│   ├── create_stage_table.sql    # ステージテーブル作成
-│   ├── create_main_table.sql     # 本番テーブル作成
-│   ├── merge_reservations_rb.sql # MERGEストアドプロシージャ
-│   └── create_views.sql          # ビュー作成
-├── Dockerfile                    # Docker設定
-├── package.json                  # Node.js依存関係
-├── cloudbuild.yaml              # Cloud Build設定
-├── deploy.sh                    # デプロイスクリプト
-└── env.example                  # 環境変数サンプル
+├── backend/                      # Python FastAPI Backend
+│   ├── app/
+│   │   ├── main.py              # FastAPIアプリケーション
+│   │   ├── config.py            # 設定管理
+│   │   ├── models/schemas.py    # Pydanticモデル
+│   │   ├── services/            # サービス層
+│   │   │   ├── store_service.py
+│   │   │   ├── bigquery_service.py
+│   │   │   ├── gcs_service.py
+│   │   │   ├── transformer.py
+│   │   │   └── scraper_client.py
+│   │   ├── utils/logger.py      # ログ管理
+│   │   └── api/routes.py        # APIルート
+│   ├── requirements.txt         # Python依存関係
+│   ├── Dockerfile              # Python Docker設定
+│   └── deploy.sh               # デプロイスクリプト
+├── scraper/                     # Node.js Scraper Service
+│   ├── src/
+│   │   ├── index.js            # Express API
+│   │   ├── config/index.js     # 設定管理
+│   │   ├── utils/logger.js     # ログ管理
+│   │   └── services/
+│   │       ├── index.js        # サービスインデックス
+│   │       └── scraper.js      # Puppeteerスクレイピング
+│   ├── package.json            # Node.js依存関係
+│   ├── Dockerfile              # Node.js Docker設定
+│   └── env.example             # 環境変数サンプル
+├── sql/                        # BigQueryスキーマ
+│   ├── setup_bigquery.sql      # 初期セットアップ
+│   ├── create_dataset.sql      # データセット作成
+│   ├── create_stage_table.sql  # ステージテーブル
+│   ├── create_main_table.sql   # 本番テーブル
+│   ├── merge_reservations_rb.sql # MERGEプロシージャ
+│   └── create_views.sql        # ビュー作成
+├── MIGRATION_GUIDE.md          # 移行ガイド
+└── DEVELOPMENT_LOG.md          # 開発ログ
 ```
 
 ## セットアップ手順
