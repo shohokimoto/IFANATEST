@@ -1,32 +1,41 @@
-# 予約データETL／ダッシュボード（レストランボード先行）要件定義書 v1
+# 予約データETL／ダッシュボード（レストランボード先行）要件定義書 v1.1（JS完結版）
 最終更新: 2025-09-21 (JST)
 作成: ChatGPT（ユーザー要件ヒアリング反映）
 
 ---
 
+## 変更履歴（Changelog）
+- **v1.1**: MVPの整形処理（正規化）を **Scraper（Node.js）側で完結** させる方針に改訂。Backend（Python/FastAPI）はフェーズ2以降の選択肢に降格。図・FRの責務・環境変数を更新。
+- v1.0: 初版（Backendで整形）
+
+---
+
 ## 0. 本ドキュメントの目的
 - レストランボード（以下RB）を対象に、**Cloud Runでの定期スクレイピング → GCS → BigQuery（ステージ→MERGE） → Connected Sheets表示**までの**MVP要件**を定義する。
-- 将来、Ebica／TORETA／TableCheck／（名称確認中: レスザイコ／デウs）へ水平展開し、FastAPI+Reactのアプリ表示へ拡張する前提の**段階的スコープ**を明確化する。
+- **MVPでは、取得〜整形〜GCS〜BQ Load/MERGE までを Node.js（Scraper）で完結**する。
+- 将来、Ebica／TORETA／TableCheck 等へ水平展開し、必要に応じて Python（pandas）基盤へ分離可能な**段階的スコープ**を明確化する。
 
 ---
 
 ## 1. スコープ
-### 1.1 In Scope（MVP / フェーズ1: RBのみ）
-- Cloud Run にデプロイする**Dockerコンテナ**での定期実行（Cloud Schedulerで1日1回）
-- Google スプレッドシート（平置き）からの**店舗マスタ**（ID/ユーザー名/パスワード等）の取得
-- Puppeteer による RB 管理画面の**ログイン・期間指定・CSVダウンロード**
-- 文字コード/列名/日付・時間/数値の**正規化** → **共通カラム**に整形
-- 整形CSVを **GCS** へ配置
+### 1.1 In Scope（MVP / フェーズ1: RBのみ・JS完結）
+- Cloud Run にデプロイする **1サービス（Node.js + Puppeteer）** の定期実行（Cloud Schedulerで1日1回）
+- Google スプレッドシート（平置き）からの **店舗マスタ** 取得
+- Puppeteer による RB 管理画面の **ログイン・期間指定・CSVダウンロード**
+- **Node.js 内での整形（正規化/共通カラム化）・レコードキー/ハッシュ付与**
+- 整形済みCSVを **GCS** へ配置
 - **BigQuery ステージ表**へのロード（Load Job）
 - **ステージ→本番（MERGE）** による差分反映（重複排除／遅延更新反映）
 - **Connected Sheets** による期間指定表示（まずは明細表示）
-- 手動テスト用の**CSV手動アップロード→Load→MERGE**運用
+- 手動テスト用の **CSV手動アップロード→Load→MERGE** 運用
 
 ### 1.2 Out of Scope（MVP外／フェーズ2以降）
 - Secret Manager への資格情報移行（MVPはシート平置き）
-- FastAPI + React でのアプリ表示（MVPは Connected Sheets）
+- **Backend（Python/FastAPI）による整形層の分離**（必要になった時点で導入）
 - 各ベンダーの公式API連携（入手可能な場合の将来検討）
 - 2FA/画像認証の自動突破（対象店舗はMVPでは除外/手動）
+
+> 備考：フェーズ2で「前集計・マスタJOIN・KPI前計算」等が増大した際に、整形層のみPythonへ抽出できるよう関数分割・I/Oを設計する。
 
 ---
 
@@ -47,17 +56,17 @@
 
 ---
 
-## 4. 全体アーキテクチャ（MVP）
+## 4. 全体アーキテクチャ（MVP：JS完結）
 ```
-[Google Sheets: Stores]  →  [Scraper Service: Node.js + Puppeteer]
-       │ 読取API                          │ CSV(共通カラム)
-       └───────┬──────────────────────┘
-               ▼
-    [Backend Service: Python FastAPI]  →  [GCS: landing/tmp]  →  [BigQuery: stage_reservations_rb]  →  MERGE  →  [reservations_rb]
-                                                                                                                      │
-                                                                                                                      └→ [Connected Sheets]
+[Google Sheets: Stores] → [Scraper App: Node.js + Puppeteer + ETL]
+        │ 読取API                 │ CSV(共通カラム) + BQ Load/MERGE
+        └───────────────┬───────────────┘
+                        ▼
+           [GCS: landing/tmp] → [BigQuery: stage_reservations_rb] → MERGE → [reservations_rb]
+                                                                                       │
+                                                                                       └→ [Connected Sheets]
 ```
-- リージョンは原則 **asia-northeast1** で統一。タイムゾーンは **JST**。
+- リージョンは原則 **asia-northeast1**。タイムゾーンは **JST**。
 
 ---
 
@@ -70,35 +79,36 @@
 - `from_date/to_date`: 指定があれば期間優先でバックフィル。
 - 共有は最小限。監査ログ配慮。MVPは平置きを許容。
 
-### FR-2. スクレイピング（Scraper Service: Node.js + Puppeteer）
-- RB ログイン → 期間設定 → CSVダウンロード。
-- ダウンロード先は `/tmp`。Shift_JIS→UTF-8へ変換。
+### FR-2. スクレイピング（Scraper App: Node.js + Puppeteer）
+- RB ログイン → 期間設定 → CSVダウンロード（/tmp）。
+- 文字コード **Shift_JIS→UTF-8** へ変換（例：iconv-lite）。
 - 失敗時は最大3回リトライ（指数バックオフ）。
-- 2FA/画像認証がある店舗は `active=false` で除外（MVP）。
-- Express APIでHTTPエンドポイントを提供し、Backend Serviceから呼び出し。
+- 2FA/画像認証あり店舗は `active=false` で除外（MVP）。
 
-### FR-3. 整形（Backend Service: Python FastAPI）
-- 共通カラムへ正規化（#7 参照）。
-- 欠損/異常値はスキップまたはNULL化。日付/時間は正規フォーマットへ。
-- 1店舗ごとCSV生成、さらに全店舗分を1ファイルに集約可能。
-- Pandasを使用したデータ変換処理。
+### **FR-3. 整形（Scraper App 内で完結）**
+- CSVパース（例：csv-parse / fast-csv）。
+- **共通カラムへ正規化**（#7 参照）。
+- 欠損/異常値はスキップまたはNULL化。日付/時間は正規フォーマットへ（`DATE`/`TIME`）。
+- **レコードキー（自然キー or 合成）** と **内容ハッシュ（MD5）** を付与。
+- 1店舗ごとCSV生成、必要に応じて全店舗分を1ファイルに集約可能。
+- 将来の他ベンダー展開を見据え、**列マッピング/型変換を外部JSON/YAML（スキーマ定義）**で管理。
 
-### FR-4. GCS への配置（Backend Service）
+### FR-4. GCS への配置（Scraper App）
 - オブジェクト命名規則（例）:
   - `landing/restaurant_board/YYYY/MM/DD/run_<run_id>/rb_<store_id>_<YYYYMMDD>.csv`
   - 手動アップロード用: `manual/restaurant_board/YYYY/MM/...`
-- Google Cloud Storage Python Client Libraryを使用。
+- Google Cloud Storage Node.js Clientを使用。
 
-### FR-5. BigQuery への取り込み（Backend Service）
-- 取り込み先は **ステージ表** `stage_reservations_rb`（日付は `ingestion_ts` パーティション）。
+### FR-5. BigQuery への取り込み（Scraper App）
+- 取り込み先は **ステージ表** `stage_reservations_rb`（`ingestion_ts` パーティション）。
 - スキーマは共通カラム + メタ（#7）。
-- Google Cloud BigQuery Python Client Libraryを使用。
+- BigQuery Node.js Clientを使用（Load Job）。
 
-### FR-6. ステージ→MERGE（差分反映）（Backend Service）
+### FR-6. ステージ→MERGE（差分反映）（Scraper App）
 - 一意キー `record_key` と内容ハッシュ `record_hash` を用いて、本番 `reservations_rb` に**UPSERT**。
-- ステージ内重複は `ROW_NUMBER()` で排除（最新 `ingestion_ts` を優先）。
+- ステージ内重複は `ROW_NUMBER()` 相当の正規化を事前整形 or BQ SQLで実施（最新 `ingestion_ts` を優先）。
 - 再取得窓は **前日 + 過去7日** を推奨。
-- BigQuery MERGE文をPythonから実行。
+- MERGEは **Scraper App からSQL実行** する。
 
 ### FR-7. 表示（Connected Sheets）
 - `reservations_rb` を**期間指定**で参照（必要列に限定するカスタムSQL）。
@@ -110,7 +120,7 @@
 ---
 
 ## 6. 非機能要件（NFR）
-- **性能/スケール**: 100〜500店舗、1店舗/日 あたり数百〜数千行規模を想定。日次処理は1時間以内完了。
+- **性能/スケール**: 100〜500店舗、1店舗/日 数百〜数千行。日次処理は1時間以内完了。
 - **可用性**: 失敗時の再実行（リトライ/手動再実行）で翌朝6時までにデータ反映を目標。
 - **セキュリティ**: MVPは平置きだが、パスワードはログ出力禁止/共有最小。将来Secret Manager移行。
 - **可観測性**: 実行件数/失敗率/処理時間/ロード行数をログ・ダッシュボードで確認可。
@@ -160,7 +170,7 @@
 ---
 
 ## 10. 重複/差分反映ルール
-- ステージ内は `ROW_NUMBER() OVER(PARTITION BY record_key ORDER BY ingestion_ts DESC)` で最新1行に正規化。
+- ステージ内は `ROW_NUMBER() OVER(PARTITION BY record_key ORDER BY ingestion_ts DESC)` で最新1行に正規化（またはMERGE前サブクエリ）。
 - MERGE 条件: `vendor, store_id, record_key` が一致
   - **一致 & ハッシュ相違** → UPDATE（内容更新）
   - **未一致** → INSERT（新規）
@@ -209,6 +219,7 @@
 - **Docker完結**でローカル→本番までビルド/実行可能。
 - Cloud Run/Scheduler の設定値（環境変数）:
   - `PROJECT_ID, BQ_DATASET, GCS_BUCKET, STORES_SHEET_ID, DAYS_BACK, FROM_DATE, TO_DATE, REGION`
+  - （任意）`LOG_LEVEL, DRY_RUN, RETRY_MAX, RETRY_BACKOFF_MS`
 - ログはCloud Loggingに集約。将来アラート連携（メール/Slack等）。
 
 ---
@@ -223,14 +234,14 @@
 ## 18. リスクと対応
 - **DOM変更/規約変更**: 選択子変更監視/迅速改修（SLA: 48h 以内）
 - **2FA発生**: 対象店舗はMVP対象外→平時は `active=false` 運用
-- **CSV仕様差異**: ベンダー別スキーマYAMLで吸収（RBは現物優先で更新）
+- **CSV仕様差異**: ベンダー別スキーマYAML/JSONで吸収（RBは現物優先で更新）
 - **平置きパスワード**: 移行計画（Secret Manager）を別紙で管理
 
 ---
 
 ## 19. フェーズ計画
-- **フェーズ1（本書）**: RBのみ + Connected Sheets 表示
-- **フェーズ2**: ベンダー追加（Ebica/TORETA/TableCheck/ほか）、資格情報をSecret Managerへ、`fact_daily_metrics`導入
+- **フェーズ1（本書）**: RBのみ、**Node.jsで整形まで完結** + Connected Sheets 表示
+- **フェーズ2**: ベンダー追加（Ebica/TORETA/TableCheck/ほか）、資格情報をSecret Managerへ、`fact_daily_metrics`導入、（必要に応じ）**整形層をPythonに分離**
 - **フェーズ3**: FastAPI/Reactアプリ（master/sales ロール、KPIダッシュボード、CSVエクスポート）
 
 ---
@@ -244,7 +255,6 @@
 ---
 
 ## 21. 参考: Connected Sheets カスタムSQL（要件）
-- 期間指定で必要列のみ。
 ```
 SELECT store_id, store_name, reserve_date, booking_date,
        start_time, end_time, course_name, headcount, channel, status
@@ -264,5 +274,11 @@ ORDER BY reserve_date, store_id;
 
 ---
 
-*本要件定義書はMVPの合意ベース。変更点は版管理（v1→）で追記・改訂する。*
+### 付録A：推奨ライブラリ（Node.js）
+- `puppeteer`, `iconv-lite`, `csv-parse` or `fast-csv`, `dayjs`（TZプラグイン）, `crypto`, `@google-cloud/storage`, `@google-cloud/bigquery`, `p-retry`
+
+### 付録B：移行容易性のための設計指針
+- 変換関数は**純関数**で分離（I/O分離）。
+- 列マッピング/型変換を**外部スキーマ（JSON/YAML）**で管理し、Python移行時はスキーマ共通化。
+- MERGE SQLは**.sqlファイル**として共通管理し、JS/Python双方から実行できる形にする。
 

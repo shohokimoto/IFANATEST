@@ -1,0 +1,59 @@
+{
+  "vendor": "restaurant_board",
+  "version": "1.0",
+  "description": "Restaurant Board CSV column mapping and transformation schema",
+  "columnMapping": {
+    "予約番号": "reservation_id",
+    "店舗名": "store_name_rb", 
+    "予約日": "reserve_date_raw",
+    "受付日": "booking_date_raw",
+    "開始時間": "start_time_raw",
+    "終了時間": "end_time_raw",
+    "コース名": "course_name",
+    "人数": "headcount_raw",
+    "経路": "channel_raw",
+    "ステータス": "status_raw",
+    "備考": "note"
+  },
+  "typeConversions": {
+    "reserve_date_raw": "date",
+    "booking_date_raw": "date", 
+    "start_time_raw": "time",
+    "end_time_raw": "time",
+    "headcount_raw": "integer"
+  },
+  "channelMapping": {
+    "ホットペッパー": "hotpepper",
+    "食べログ": "tabelog", 
+    "ぐるなび": "gurunavi",
+    "一休": "ikyu",
+    "電話": "phone",
+    "店頭": "walk_in",
+    "ネット": "web",
+    "その他": "other"
+  },
+  "statusMapping": {
+    "確定": "confirmed",
+    "キャンセル": "cancelled",
+    "仮予約": "tentative", 
+    "来店済み": "completed",
+    "ノーショー": "no_show"
+  },
+  "dateFormats": [
+    "YYYY-MM-DD",
+    "YYYY/MM/DD", 
+    "MM/DD/YYYY",
+    "DD/MM/YYYY",
+    "YYYY年MM月DD日"
+  ],
+  "timeFormats": [
+    "HH:mm",
+    "HH:mm:ss",
+    "H:mm",
+    "H:mm:ss"
+  ],
+  "validation": {
+    "required": ["store_id", "reserve_date"],
+    "optional": ["booking_date", "start_time", "end_time", "course_name", "headcount", "channel", "status"]
+  }
+}
